@@ -9,8 +9,8 @@ from melos.utils.config import Config
 logger = logging.getLogger(__name__)
  
 class MelosBot(commands.Bot):
-    def __init__(self):
-        self.config = Config.parse('config.json')
+    def __init__(self, config_file):
+        self.config = Config.parse(config_file)
         intents: discord.Intents = discord.Intents.default()
         intents.members = True
         super().__init__(

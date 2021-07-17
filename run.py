@@ -6,5 +6,5 @@ from melos import MelosBot
 
 if __name__ == '__main__':
     fileConfig('logging.ini')
-    bot = MelosBot()
+    bot = MelosBot('config.json')
     bot.run()
