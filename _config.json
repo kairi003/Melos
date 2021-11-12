@@ -4,5 +4,5 @@
     "description": "I'm Melos and talk your text.",
     "ttss": "gtts",
     "logging_level": "INFO",
-    "extensions": ["melos.cogs.mlcog"]
+    "extensions": [".utils.ttss", ".cogs.mlcog"]
 }

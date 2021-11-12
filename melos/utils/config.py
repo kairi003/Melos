@@ -3,7 +3,7 @@
 
 import json
 from typing import List
-from melos.utils.ttss import TTSSource, gTTSSource, JTalkSource
+from ..utils.ttss import TTSSource, gTTSSource, JTalkSource
 
 TTS_SOURCE = {
     'gtts': gTTSSource,
