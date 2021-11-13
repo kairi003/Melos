@@ -28,7 +28,7 @@ class MelosCog(commands.Cog):
         self.reading_channel: RadingChannel = defaultdict(set)
         self.play_queue: PlayQueue = defaultdict(deque)
         self.tts_source = bot.config.tts_source
-        self.member_config = defaultdict(lambda :['ja',1.0])
+        self.member_config = defaultdict(lambda :['ja',1.0,1.0])
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -45,8 +45,8 @@ class MelosCog(commands.Cog):
         if ctx.command is not None:
             # It's command
             return
-        lang, tempo = self.member_config[message.author.id]
-        for ttss in self.tts_source.from_message(message, lang, tempo):
+        lang, tempo, pitch = self.member_config[message.author.id]
+        for ttss in self.tts_source.from_message(message, lang, tempo, pitch):
             self.update_queue(ttss.guild, ttss)
 
     def update_queue(self, guild:discord.guild, new_src:Optional[TTSSource]=None):
@@ -106,14 +106,20 @@ class MelosCog(commands.Cog):
         config = self.member_config[ctx.author.id]
         if (m := re.search(r'[a-zA-Z-]+', arg)) and (lang := m[0]) in TTS_LANGS:
             config[0] = lang
-        if (m := re.search(r'[\d.]+', arg)):
+        if (m := re.search(r'(?<![:\d.])[\d.]+', arg)):
             try:
                 tempo = min(max(0.5, float(m[0])), 100)
                 config[1] = tempo
             except ValueError:
                 pass
-        lang, tempo = config
-        await ctx.send(f'lang: {TTS_LANGS[lang]}\ntempo: {tempo}', reference=ctx.message)
+        if (m := re.search(r'(?<=:)[\d.]+', arg)):
+            try:
+                pitch = min(max(0.5, float(m[0])), 2)
+                config[2] = pitch
+            except ValueError:
+                pass
+        lang, tempo, pitch = config
+        await ctx.send(f'Language: {TTS_LANGS[lang]}\nTempo: x{tempo}\nPitch: x{pitch}', reference=ctx.message)
     
     @main.command(aliases=['h'])
     async def help(self, ctx: commands.Context, name=None):
@@ -121,14 +127,22 @@ class MelosCog(commands.Cog):
         if name == 'langs':
             await ctx.send('```\n' + '\n'.join(f'{k}: {v}' for k,v in TTS_LANGS.items()) + '\n```')
             return
+        if name == 'setting':
+            embed=discord.Embed(title="!ml setting [lang][tempo][:pitch]", description="Setting user config as lang, tempo or pitch. The values are extracted from the argument using regular expressions, in no particular order.", color=0xff0000)
+            embed.add_field(name="lang", value="Country code. `!ml help langs` for details.\nexp: `[a-zA-Z-]+`", inline=False)
+            embed.add_field(name="tempo", value="A Tempo as float(0.5-100.0).\nexp: `(?<![:\d.])[\d.]+`", inline=False)
+            embed.add_field(name="pitch", value="A Pitch as float(0.5-2.0) prefixed `:`.\nexp: `(?<=:)[\d.]+`", inline=False)
+            embed.add_field(name="Example", value="`!ml setting en .5 :1.2` => English, Tempo x0.5, Pitch x1.2\n`!ml setting :0.5ja10` => Japanese, Tempo x10.0, Pitch x0.5", inline=False)
+            await ctx.send(embed=embed)
+            return
         embed=discord.Embed(title="Melos's Help", description="I'm Melos and talk your text.", color=0xff0000)
         embed.add_field(name="!ml start(s)", value="Connect to your voice channel and add your text channel to the reading set.", inline=False)
         embed.add_field(name="!ml close(c)", value="Disconnect from my voice channel and clear my reading set.", inline=False)
         embed.add_field(name="!ml skip(sk)", value="Skip my talking.", inline=False)
-        embed.add_field(name="!ml setting(set,st) [lang] [tempo]", value="Setting user config. `lang` is a country code and `tempo` is in between 0.5-100", inline=False)
+        embed.add_field(name="!ml setting(set,st) [lang][tempo][:pitch]", value="Setting user config as lang, tempo or pitch.\n`!ml help setting` for details.", inline=False)
         embed.add_field(name="!ml help(h)", value="Show help.", inline=False)
         embed.add_field(name="!ml reload", value="[Owner Only] Reload extensions.", inline=False)
-        embed.add_field(name="Modifier Prefix", value="To temporarily reflect the setting, prefix the text with `\\xx1.0 `, a backslash, a country code, a tempo, and a space. There will be no space between the country code and the tempo. (e.g. `\\en0.5 Hello, World!`)\nLanguages List: `!ml help langs`", inline=False)
+        embed.add_field(name="Modifier Prefix", value="To temporarily reflect the setting, prefix the text with `\\xx1.0:1.0 `, a backslash, a country code, a tempo, a pitch, and a space. There will be no space between the country code and the tempo. (e.g. `\\en0.5:1.2 Hello, World!`)\nLanguages List: `!ml help langs`", inline=False)
         await ctx.send(embed=embed)
     
     @main.command()

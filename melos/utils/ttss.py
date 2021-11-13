@@ -18,6 +18,7 @@ TTS_SOURCE_REPR_MAX = 20
 class TTSSource(discord.PCMVolumeTransformer, metaclass=ABCMeta):
     MAX_TEXT_PER_VOICE = 2000
     DEFAULT_TEMPO = 1.0
+    DEFAULT_BITRATE = 24000
 
     def __init__(self, original: discord.AudioSource, text: str, message: discord.Message, volume: float = 1.0):
         super().__init__(original, volume)
@@ -32,25 +33,29 @@ class TTSSource(discord.PCMVolumeTransformer, metaclass=ABCMeta):
 
     @classmethod
     @abstractclassmethod
-    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1.0) -> 'TTSSource':
+    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1.0, speed=1.0) -> 'TTSSource':
         pass
 
     @classmethod
-    def from_message(cls, message: discord.Message, lang='ja', tempo=1.0) -> Iterator['TTSSource']:
+    def from_message(cls, message: discord.Message, lang='ja', tempo=1.0, pitch=1.0) -> Iterator['TTSSource']:
         content = cls.message_ruby(message).strip()
-        if m:=re.match(r'\\([a-zA-Z-]*)([\d.]*) ([\s\S]*)', content):
-            lang = m[1]
+        if m := re.match(r'\\(?P<lang>[a-zA-Z-]*)(?P<tempo>[\d.]*):?(?P<pitch>[\d.]*) (?P<content>[\s\S]*)', content):
+            lang = m['lang']
             try:
-                tempo = float(m[2])
+                tempo = float(m['tempo'])
             except ValueError:
                 pass
-            content = m[3]
+            try:
+                pitch = float(m['pitch'])
+            except ValueError:
+                pass
+            content = m['content']
         if not content:
             return
-        tempo = min(max(0.5, tempo*cls.DEFAULT_TEMPO), 100)
+        tempo = min(max(0.5, tempo*cls.DEFAULT_TEMPO/pitch), 100)
         x = cls.MAX_TEXT_PER_VOICE
         for i in range(math.ceil(len(content)/x)):
-            yield cls.from_text(content[i*x:(i+1)*x], message, lang, tempo)
+            yield cls.from_text(content[i*x:(i+1)*x], message, lang, tempo, pitch)
 
     @staticmethod
     def message_ruby(message: discord.Message):
@@ -83,14 +88,16 @@ class TTSSource(discord.PCMVolumeTransformer, metaclass=ABCMeta):
 
 class gTTSSource(TTSSource):
     MAX_TEXT_PER_VOICE = 2000
-    DEFAULT_TEMPO = 1.3
+    DEFAULT_TEMPO = 1.4
+    DEFAULT_BITRATE = 24000
     TTS_LANGS = gtts.lang.tts_langs()
 
     @classmethod
-    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1.0):
+    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1.0, speed=1.0):
         if lang not in cls.TTS_LANGS:
             lang = 'ja'
-        ffmpeg_options = ['-loglevel', 'quiet', '-af', f'atempo={tempo}']
+        ffmpeg_options = ['-loglevel', 'quiet', '-af',
+                          f'asetrate={cls.DEFAULT_BITRATE * speed},atempo={tempo}']
         r, w = os.pipe()
 
         def _write_to_stream():
@@ -108,14 +115,16 @@ class gTTSSource(TTSSource):
 class JTalkSource(TTSSource):
     MAX_TEXT_PER_VOICE = 500
     DEFAULT_TEMPO = 1.0
+    DEFAULT_BITRATE = 24000
 
     @classmethod
-    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1.0):
+    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1.0, speed=1.0):
         program = 'open_jtalk'
         args = ['-x', '/var/lib/mecab/dic/open-jtalk/naist-jdic',
                 '-m', '/usr/share/hts-voice/mei/mei_normal.htsvoice',
                 '-ow', '/dev/stdout']
-        ffmpeg_options = ['-loglevel', 'quiet', '-af', f'atempo={tempo}']
+        ffmpeg_options = ['-loglevel', 'quiet', '-af',
+                          f'asetrate={cls.DEFAULT_BITRATE * speed},atempo={tempo}']
         proc = Popen([program, *args], stdin=PIPE, stdout=PIPE)
 
         def _write_to_stream():
@@ -129,7 +138,10 @@ class JTalkSource(TTSSource):
             proc.stdout, pipe=True, options=' '.join(ffmpeg_options))
         return cls(original, text, message)
 
+
 def setup(bot):
     pass
+
+
 def teardown(bot):
     pass
