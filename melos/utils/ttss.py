@@ -35,7 +35,7 @@ class TTSSource(discord.PCMVolumeTransformer, metaclass=ABCMeta):
     def audio_filter(cls, tempo, key_diff):
         mod_tempo = tempo
         a_filters = []
-        if not math.isclose(key_diff, 0):
+        if key_diff != 0:
             pitch_rate = 2**(key_diff/12)
             mod_tempo /= pitch_rate
             a_filters.append(f'asetrate={cls.DEFAULT_BITRATE * pitch_rate}')
@@ -64,8 +64,8 @@ class TTSSource(discord.PCMVolumeTransformer, metaclass=ABCMeta):
                 lang = n[0]
             if n := re.search(r'(?<![\d.+-])(\d+\.?\d*|\d*\.\d+)', prefix):
                 tempo *= float(n[0])
-            if n:= re.search(r'[+-](\d+\.?\d*|\d*\.\d+)', prefix):
-                key_diff += float(n[0])
+            if n:= re.search(r'[+-]\d+', prefix):
+                key_diff += int(n[0])
         if not content:
             return
         x = cls.MAX_TEXT_PER_VOICE
