@@ -45,8 +45,8 @@ class MelosCog(commands.Cog):
         if ctx.command is not None:
             # It's command
             return
-        lang, tempo, pitch = self.member_config[message.author.id]
-        for ttss in self.tts_source.from_message(message, lang, tempo, pitch):
+        lang, tempo, key_diff = self.member_config[message.author.id]
+        for ttss in self.tts_source.from_message(message, lang, tempo, key_diff):
             self.update_queue(ttss.guild, ttss)
 
     def update_queue(self, guild:discord.guild, new_src:Optional[TTSSource]=None):
@@ -104,22 +104,14 @@ class MelosCog(commands.Cog):
     @main.command(aliases=['set', 'st'])
     async def setting(self, ctx: commands.Context, *, arg=''):
         config = self.member_config[ctx.author.id]
-        if (m := re.search(r'[a-zA-Z-]+', arg)) and (lang := m[0]) in TTS_LANGS:
-            config[0] = lang
-        if (m := re.search(r'(?<![:\d.])[\d.]+', arg)):
-            try:
-                tempo = min(max(0.5, float(m[0])), 100)
-                config[1] = tempo
-            except ValueError:
-                pass
-        if (m := re.search(r'(?<=:)[\d.]+', arg)):
-            try:
-                pitch = min(max(0.5, float(m[0])), 2)
-                config[2] = pitch
-            except ValueError:
-                pass
-        lang, tempo, pitch = config
-        await ctx.send(f'Language: {TTS_LANGS[lang]}\nTempo: x{tempo}\nPitch: x{pitch}', reference=ctx.message)
+        if (n := re.search(r'[a-z]{2}(-[A-Z]{2})?', arg)) and n[0] in TTS_LANGS:
+            config[0] = n[0]
+        if n := re.search(r'(?<![\d.+-])(\d+\.?\d*|\d*\.\d+)', arg):
+            config[1] = float(n[0])
+        if n := re.search(r'[+-](\d+\.?\d*|\d*\.\d+)', arg):
+            config[2] = float(n[0])
+        lang, tempo, key_diff = config
+        await ctx.send(f'Language: {TTS_LANGS[lang]}\nTempo: x{tempo}\nKey: {key_diff:+}', reference=ctx.message)
     
     @main.command(aliases=['h'])
     async def help(self, ctx: commands.Context, name=None):

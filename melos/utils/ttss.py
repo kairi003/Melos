@@ -30,32 +30,47 @@ class TTSSource(discord.PCMVolumeTransformer, metaclass=ABCMeta):
         if len(self.text) < TTS_SOURCE_REPR_MAX:
             return self.text
         return self.text[:TTS_SOURCE_REPR_MAX] + '...'
+    
+    @classmethod
+    def audio_filter(cls, tempo, key_diff):
+        mod_tempo = tempo
+        a_filters = []
+        if not math.isclose(key_diff, 0):
+            pitch_rate = 2**(key_diff/12)
+            mod_tempo /= pitch_rate
+            a_filters.append(f'asetrate={cls.DEFAULT_BITRATE * pitch_rate}')
+        while mod_tempo > 100:
+            a_filters.append('atempo=100')
+            mod_tempo /= 100
+        while mod_tempo < 0.5:
+            a_filters.append('atempo=0.5')
+            mod_tempo *= 2
+        if not math.isclose(mod_tempo, 1):
+            a_filters.append(f'atempo={mod_tempo}')
+        return ['-af', ','.join(a_filters)]
 
     @classmethod
     @abstractclassmethod
-    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1.0, speed=1.0) -> 'TTSSource':
+    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1, key_diff=0) -> 'TTSSource':
         pass
 
     @classmethod
-    def from_message(cls, message: discord.Message, lang='ja', tempo=1.0, pitch=1.0) -> Iterator['TTSSource']:
+    def from_message(cls, message: discord.Message, lang='ja', tempo=1, key_diff=0) -> Iterator['TTSSource']:
         content = cls.message_ruby(message).strip()
-        if m := re.match(r'\\(?P<lang>[a-zA-Z-]*)(?P<tempo>[\d.]*):?(?P<pitch>[\d.]*) (?P<content>[\s\S]*)', content):
-            lang = m['lang']
-            try:
-                tempo = float(m['tempo'])
-            except ValueError:
-                pass
-            try:
-                pitch = float(m['pitch'])
-            except ValueError:
-                pass
-            content = m['content']
+        if m := re.match(r'\\([a-zA-Z\d.*+-]+) (.+)', content, re.DOTALL):
+            prefix = m[1]
+            content = m[2]
+            if n := re.search(r'[a-z]{2}(-[A-Z]{2})?', prefix):
+                lang = n[0]
+            if n := re.search(r'(?<![\d.+-])(\d+\.?\d*|\d*\.\d+)', prefix):
+                tempo *= float(n[0])
+            if n:= re.search(r'[+-](\d+\.?\d*|\d*\.\d+)', prefix):
+                key_diff += float(n[0])
         if not content:
             return
-        tempo = min(max(0.5, tempo*cls.DEFAULT_TEMPO/pitch), 100)
         x = cls.MAX_TEXT_PER_VOICE
         for i in range(math.ceil(len(content)/x)):
-            yield cls.from_text(content[i*x:(i+1)*x], message, lang, tempo, pitch)
+            yield cls.from_text(content[i*x:(i+1)*x], message, lang, tempo, key_diff)
 
     @staticmethod
     def message_ruby(message: discord.Message):
@@ -93,11 +108,10 @@ class gTTSSource(TTSSource):
     TTS_LANGS = gtts.lang.tts_langs()
 
     @classmethod
-    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1.0, speed=1.0):
+    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1, key_diff=0):
         if lang not in cls.TTS_LANGS:
             lang = 'ja'
-        ffmpeg_options = ['-loglevel', 'quiet', '-af',
-                          f'asetrate={cls.DEFAULT_BITRATE * speed},atempo={tempo}']
+        ffmpeg_options = ['-loglevel', 'quiet'] + cls.audio_filter(tempo, key_diff)
         r, w = os.pipe()
 
         def _write_to_stream():
@@ -118,13 +132,12 @@ class JTalkSource(TTSSource):
     DEFAULT_BITRATE = 24000
 
     @classmethod
-    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1.0, speed=1.0):
+    def from_text(cls, text: str, message: discord.Message, lang='ja', tempo=1, key_diff=0):
         program = 'open_jtalk'
         args = ['-x', '/var/lib/mecab/dic/open-jtalk/naist-jdic',
                 '-m', '/usr/share/hts-voice/mei/mei_normal.htsvoice',
                 '-ow', '/dev/stdout']
-        ffmpeg_options = ['-loglevel', 'quiet', '-af',
-                          f'asetrate={cls.DEFAULT_BITRATE * speed},atempo={tempo}']
+        ffmpeg_options = ['-loglevel', 'quiet'] + cls.audio_filter(tempo, key_diff)
         proc = Popen([program, *args], stdin=PIPE, stdout=PIPE)
 
         def _write_to_stream():
