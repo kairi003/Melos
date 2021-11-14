@@ -47,7 +47,10 @@ class TTSSource(discord.PCMVolumeTransformer, metaclass=ABCMeta):
             mod_tempo *= 2
         if not math.isclose(mod_tempo, 1):
             a_filters.append(f'atempo={mod_tempo}')
-        return ['-af', ','.join(a_filters)]
+        if a_filters:
+            return ['-af', ','.join(a_filters)]
+        else:
+            return []
 
     @classmethod
     @abstractclassmethod
