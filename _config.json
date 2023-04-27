@@ -1,5 +1,5 @@
 {
-    "token": "",
+    "token": "${BOT_TOKEN}",
     "command_prefix": "!",
     "description": "I'm Melos and talk your text.",
     "ttss": "gtts",
