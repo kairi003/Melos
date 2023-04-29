@@ -11,18 +11,19 @@ logger = logging.getLogger(__name__)
 class MelosBot(commands.Bot):
     def __init__(self, config_file):
         self.config = Config.parse(config_file)
-        intents: discord.Intents = discord.Intents.default()
-        intents.members = True
+        intents: discord.Intents = discord.Intents.all()
         super().__init__(
             command_prefix=self.config.command_prefix,
             description=self.config.description,
             intents=intents
         )
         self.remove_command('help')
-        for ext in self.config.extensions:
-            self.load_extension(ext, package=__spec__.parent)
     
-    def reload(self):
+    async def setup(self):
+        for ext in self.config.extensions:
+            await self.load_extension(ext, package=__spec__.parent)
+
+    async def reload(self):
         self.config = Config.parse('config.json')
         self.command_prefix = self.config.command_prefix
         self.description = self.config.description
@@ -30,5 +31,6 @@ class MelosBot(commands.Bot):
             self.reload_extension(ext, package=__spec__.parent)
         logger.info('Reloaded')
     
-    def run(self):
-        super().run(self.config.token)
+    async def run(self):
+        await self.setup()
+        await self.start(self.config.token)

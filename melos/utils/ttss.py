@@ -12,6 +12,14 @@ import gtts.lang
 from gtts import gTTS
 from abc import ABCMeta, abstractclassmethod
 
+# TODO: Revisit FFmpegPCMAudio implementation (currently using v1.x due to v2.x bugs)
+# The current implementation uses the 1.x version of FFmpegPCMAudio because the 2.x version
+# has been determined to be buggy. In the future, update this implementation once the issues
+# with the 2.x version have been resolved.
+from .old_player import FFmpegPCMAudio
+# from discord.player import FFmpegPCMAudio
+
+
 TTS_SOURCE_REPR_MAX = 20
 
 
@@ -124,7 +132,7 @@ class gTTSSource(TTSSource):
 
         Thread(target=_write_to_stream).start()
         read_stream = open(r, 'rb')
-        original = discord.FFmpegPCMAudio(
+        original = FFmpegPCMAudio(
             read_stream, pipe=True, options=' '.join(ffmpeg_options))
         return cls(original, text, message)
 
@@ -150,14 +158,14 @@ class JTalkSource(TTSSource):
                 proc.stdin.close()
 
         Thread(target=_write_to_stream).start()
-        original = discord.FFmpegPCMAudio(
+        original = FFmpegPCMAudio(
             proc.stdout, pipe=True, options=' '.join(ffmpeg_options))
         return cls(original, text, message)
 
 
-def setup(bot):
+async def setup(bot):
     pass
 
 
-def teardown(bot):
+async def teardown(bot):
     pass
